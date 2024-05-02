@@ -1,14 +1,55 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core"
-	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
-http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
-	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="c86d76ed-489b-40d3-baf5-fb0d328ac046" >
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="c94e7d32-4cdf-4c4d-87db-9d380e578882" >
 		<http:listener-connection host="0.0.0.0" port="8081" />
 	</http:listener-config>
-	<flow name="client-chargingFlow" doc:id="e624109d-9dfd-4e52-829f-8b7a66322e20" >
-		<http:listener doc:name="Hello" doc:id="272b6249-a25e-4372-8109-04f9838d9381" config-ref="HTTP_Listener_config" path="/hello"/>
-		<set-payload value="Hello" doc:name="Set Payload" doc:id="92946712-5f28-4412-a03e-ba29d09cf5f8" />
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="020fca61-cf82-4d0f-81db-1f26d19d482a" basePath="/books/v3" >
+		<http:request-connection host="www.zohoapis.in" />
+	</http:request-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="5e789387-5165-4936-8e3b-0f3685e6fc95" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="root" database="client-charging" />
+	</db:config>
+	<db:config name="Database_Config1" doc:name="Database Config" doc:id="9341f750-1bc1-48e7-a858-a9848ddd80eb" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="root" />
+	</db:config>
+	<flow name="client_chargingFlow" doc:id="7d6b2129-a869-4b3a-b5a5-d2eee1271da4" >
+		<http:listener doc:name="Listener" doc:id="bf704cf3-ca1c-4e92-bf03-fc941daa1b6f" config-ref="HTTP_Listener_config" path="/getinvoices"/>
+		<http:request method="GET" doc:name="get invoice" doc:id="ff785247-f21d-4349-838e-22f4e9beefee" config-ref="HTTP_Request_configuration" path="/invoices" sendBodyMode="ALWAYS">
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Zoho-oauthtoken 1000.469c576531758c6b199e6e5397f92606.f9f670e5e5fd85399c26c592e4a1ce76"
+}]]]></http:headers>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="fbe4b07f-3892-4bf0-a760-05c4134e12d3">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload.invoices map ((invoice) -> {
+    customer_id: invoice.customer_id
+})
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<db:select doc:name="Select" doc:id="5439088f-d25c-43f2-b6bb-6b1be8d6d1cd" config-ref="Database_Config1">
+			<db:sql ><![CDATA[SELECT * FROM cc_customers WHERE id IN (:customerIds)
+]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{'customerIds':payload map ((item) -> item.customer_id) joinBy ", "}]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="b96f5569-8ac1-4254-90a3-b322d10a68a5" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
 	</flow>
 </mule>
