@@ -15,16 +15,13 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 	<db:config name="Database_Config" doc:name="Database Config" doc:id="5e789387-5165-4936-8e3b-0f3685e6fc95" >
 		<db:my-sql-connection host="localhost" port="3306" user="root" password="root" database="client-charging" />
 	</db:config>
-	<db:config name="Database_Config1" doc:name="Database Config" doc:id="9341f750-1bc1-48e7-a858-a9848ddd80eb" >
-		<db:my-sql-connection host="localhost" port="3306" user="root" password="root" />
-	</db:config>
 	<flow name="client_chargingFlow" doc:id="7d6b2129-a869-4b3a-b5a5-d2eee1271da4" >
 		<http:listener doc:name="Listener" doc:id="bf704cf3-ca1c-4e92-bf03-fc941daa1b6f" config-ref="HTTP_Listener_config" path="/getinvoices"/>
 		<http:request method="GET" doc:name="get invoice" doc:id="ff785247-f21d-4349-838e-22f4e9beefee" config-ref="HTTP_Request_configuration" path="/invoices" sendBodyMode="ALWAYS">
 			<http:headers ><![CDATA[#[output application/java
 ---
 {
-	"Authorization" : "Zoho-oauthtoken 1000.469c576531758c6b199e6e5397f92606.f9f670e5e5fd85399c26c592e4a1ce76"
+	"Authorization" : "Zoho-oauthtoken 1000.e5f9988e7ddec246095c65d9e4edd6b9.5cb4cfdb02a4494a68d30cbd5a6772ad"
 }]]]></http:headers>
 		</http:request>
 		<ee:transform doc:name="Transform Message" doc:id="fbe4b07f-3892-4bf0-a760-05c4134e12d3">
@@ -33,23 +30,27 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 output application/json
 ---
 payload.invoices map ((invoice) -> {
-    customer_id: invoice.customer_id
-})
-]]></ee:set-payload>
+    customer_id: invoice.customer_id,
+    amount:invoice.total
+})]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
-		<db:select doc:name="Select" doc:id="5439088f-d25c-43f2-b6bb-6b1be8d6d1cd" config-ref="Database_Config1">
-			<db:sql ><![CDATA[SELECT * FROM cc_customers WHERE id IN (:customerIds)
+		<foreach doc:name="For Each" doc:id="eca9aaf9-5715-431c-9df1-ca2c9a2013ac" collection="#[payload]">
+			<db:select doc:name="Select" doc:id="5439088f-d25c-43f2-b6bb-6b1be8d6d1cd" config-ref="Database_Config">
+			<db:sql><![CDATA[SELECT * FROM cc_customers WHERE id = :customerId
 ]]></db:sql>
-			<db:input-parameters ><![CDATA[#[{'customerIds':payload map ((item) -> item.customer_id) joinBy ", "}]]]></db:input-parameters>
+			<db:input-parameters><![CDATA[#[{'customerId':payload.customer_id}]]]></db:input-parameters>
 		</db:select>
-		<ee:transform doc:name="Transform Message" doc:id="b96f5569-8ac1-4254-90a3-b322d10a68a5" >
-			<ee:message >
-				<ee:set-payload ><![CDATA[%dw 2.0
+			<ee:transform doc:name="Transform Message" doc:id="b96f5569-8ac1-4254-90a3-b322d10a68a5">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
-payload]]></ee:set-payload>
+payload filter ($ != null)]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
+		 <set-variable variableName="customerData" value="#[if (vars.customerData != null) vars.customerData ++ payload else payload]" />
+		</foreach>
+		<set-payload value="#[vars.customerData]" />
 	</flow>
 </mule>
