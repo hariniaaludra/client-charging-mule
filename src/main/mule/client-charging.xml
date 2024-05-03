@@ -21,8 +21,13 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 			<http:headers ><![CDATA[#[output application/java
 ---
 {
-	"Authorization" : "Zoho-oauthtoken 1000.e5f9988e7ddec246095c65d9e4edd6b9.5cb4cfdb02a4494a68d30cbd5a6772ad"
+	"Authorization" : "Zoho-oauthtoken 1000.00fe85be1fbeffd40548d48dae0d2a18.5840c90383272074259a77ec8b1e1111"
 }]]]></http:headers>
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"status" : "sent"
+}]]]></http:query-params>
 		</http:request>
 		<ee:transform doc:name="Transform Message" doc:id="fbe4b07f-3892-4bf0-a760-05c4134e12d3">
 			<ee:message>
@@ -36,20 +41,43 @@ payload.invoices map ((invoice) -> {
 			</ee:message>
 		</ee:transform>
 		<foreach doc:name="For Each" doc:id="eca9aaf9-5715-431c-9df1-ca2c9a2013ac" collection="#[payload]">
-			<db:select doc:name="Select" doc:id="5439088f-d25c-43f2-b6bb-6b1be8d6d1cd" config-ref="Database_Config">
-			<db:sql><![CDATA[SELECT * FROM cc_customers WHERE id = :customerId
-]]></db:sql>
-			<db:input-parameters><![CDATA[#[{'customerId':payload.customer_id}]]]></db:input-parameters>
+			<set-variable variableName="amountData" value="#[payload.amount]" doc:name="Amount Variable"/>
+			<set-variable variableName="customerIdData" value="#[payload.customer_id]" doc:name="Customer Id Variable"/>
+			<db:select doc:name="get customer record" doc:id="5439088f-d25c-43f2-b6bb-6b1be8d6d1cd" config-ref="Database_Config">
+			<db:sql><![CDATA[
+SELECT 
+    cc_customers.*,
+    cc_customers_bank_details.acc_balance
+FROM 
+    cc_customers
+LEFT JOIN 
+    cc_customers_bank_details ON cc_customers.bank_acc_no = cc_customers_bank_details.id
+WHERE 
+    cc_customers.id = :customerId;]]></db:sql>
+			<db:input-parameters><![CDATA[#[{'customerId':payload.customer_id
+}]]]></db:input-parameters>
 		</db:select>
 			<ee:transform doc:name="Transform Message" doc:id="b96f5569-8ac1-4254-90a3-b322d10a68a5">
 			<ee:message>
 				<ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
-payload filter ($ != null)]]></ee:set-payload>
+(payload map ((item) -> item ++ {"amount": vars.amountData}))[0]]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
-		 <set-variable variableName="customerData" value="#[if (vars.customerData != null) vars.customerData ++ payload else payload]" />
+		<choice doc:name="Condition">
+				<when expression="#[payload != null and payload.acc_balance != null and payload.amount != null and payload.acc_balance as Number > payload.amount as Number]">
+                    <db:update doc:name="Update Bank Account Balance" doc:id="be2b212b-fcaa-4126-a923-f6517a7be6fb" config-ref="Database_Config">
+                        <db:sql><![CDATA[UPDATE cc_customers_bank_details SET acc_balance = acc_balance - :amount WHERE id = :bank_acc_no]]></db:sql>
+                        <db:input-parameters><![CDATA[#[{'amount': payload.amount, 'bank_acc_no': payload.bank_acc_no}]]]></db:input-parameters>
+                    </db:update>
+                    <set-payload value="#[{'customer_id': vars.customerIdData,&#10; 'status':'Updated'}]" doc:name="Set updated Payload"/>
+                </when>
+                <otherwise>
+                    <set-payload value="#[{'customer_id': vars.customerIdData,&#10; 'status':'Not updated'}]" doc:name="Not updated Payload"/>
+                </otherwise>
+            </choice>
+		 <set-variable variableName="customerData" value="#[%dw 2.0&#10;output application/json&#10;---&#10;&#10;if (vars.customerData != null) vars.customerData ++ payload else payload]" />
 		</foreach>
 		<set-payload value="#[vars.customerData]" />
 	</flow>
