@@ -21,12 +21,12 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 			<http:headers ><![CDATA[#[output application/java
 ---
 {
-	"Authorization" : "Zoho-oauthtoken 1000.00fe85be1fbeffd40548d48dae0d2a18.5840c90383272074259a77ec8b1e1111"
+	"Authorization" : "Zoho-oauthtoken 1000.acd82e2fb1b02644f97a283679fdaf24.7136ae5b8b67c2caaf4401e44d12d3fb"
 }]]]></http:headers>
 			<http:query-params ><![CDATA[#[output application/java
 ---
 {
-	"status" : "sent"
+	"cf_invoice_status" : "unpaid"
 }]]]></http:query-params>
 		</http:request>
 		<ee:transform doc:name="Transform Message" doc:id="fbe4b07f-3892-4bf0-a760-05c4134e12d3">
@@ -36,13 +36,15 @@ output application/json
 ---
 payload.invoices map ((invoice) -> {
     customer_id: invoice.customer_id,
-    amount:invoice.total
+    amount:invoice.total,
+    invoice_id:invoice.invoice_id
 })]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
 		<foreach doc:name="For Each" doc:id="eca9aaf9-5715-431c-9df1-ca2c9a2013ac" collection="#[payload]">
 			<set-variable variableName="amountData" value="#[payload.amount]" doc:name="Amount Variable"/>
 			<set-variable variableName="customerIdData" value="#[payload.customer_id]" doc:name="Customer Id Variable"/>
+			<set-variable variableName="invoiceIdData" value="#[payload.invoice_id]" doc:name="Invoice Id Variable"/>
 			<db:select doc:name="get customer record" doc:id="5439088f-d25c-43f2-b6bb-6b1be8d6d1cd" config-ref="Database_Config">
 			<db:sql><![CDATA[
 SELECT 
@@ -71,13 +73,14 @@ output application/json
                         <db:sql><![CDATA[UPDATE cc_customers_bank_details SET acc_balance = acc_balance - :amount WHERE id = :bank_acc_no]]></db:sql>
                         <db:input-parameters><![CDATA[#[{'amount': payload.amount, 'bank_acc_no': payload.bank_acc_no}]]]></db:input-parameters>
                     </db:update>
-                    <set-payload value="#[{'customer_id': vars.customerIdData,&#10; 'status':'Updated'}]" doc:name="Set updated Payload"/>
+                    <set-payload value="#[{'invoice_id':vars.invoiceIdData,&#10;'customer_id': vars.customerIdData,&#10; 'status':'Updated'}]" doc:name="Set updated Payload"/>
                 </when>
                 <otherwise>
-                    <set-payload value="#[{'customer_id': vars.customerIdData,&#10; 'status':'Not updated'}]" doc:name="Not updated Payload"/>
+                    <set-payload value="#[{'invoice_id':vars.invoiceIdData,&#10;'customer_id': vars.customerIdData,&#10; 'status':'Not updated'}]" doc:name="Not updated Payload"/>
                 </otherwise>
             </choice>
-		 <set-variable variableName="customerData" value="#[%dw 2.0&#10;output application/json&#10;---&#10;&#10;if (vars.customerData != null) vars.customerData ++ payload else payload]" />
+		 <set-variable variableName="customerData" value="#[if (vars.customerData != null) (vars.customerData default []) ++ [payload] else [payload]]" />
+
 		</foreach>
 		<set-payload value="#[vars.customerData]" />
 	</flow>
