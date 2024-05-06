@@ -17,7 +17,6 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 	<db:config name="Database_Config" doc:name="Database Config" doc:id="5e789387-5165-4936-8e3b-0f3685e6fc95" >
 		<db:my-sql-connection host="localhost" port="3306" user="root" password="root" database="client-charging" />
 	</db:config>
-	
 	<flow name="cron-triggered-flow">
     <scheduler doc:name="Scheduler" doc:id="574d36d8-f26e-4612-a4b9-d1f4dd7fcd89" >
 			<scheduling-strategy >
@@ -35,7 +34,7 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 			<http:headers ><![CDATA[#[output application/java
 ---
 {
-	"Authorization" : "Zoho-oauthtoken 1000.ad8993861bcf13d5ccd4f1c8524d7076.42d46c0206955953c172c8184fc54340"
+	"Authorization" : "Zoho-oauthtoken 1000.752390a272381e79a63437d0685203aa.83198aeda70b771a577a53453874fc29"
 }]]]></http:headers>
 			<http:query-params ><![CDATA[#[output application/java
 ---
@@ -51,11 +50,13 @@ output application/json
 payload.invoices map ((invoice) -> {
     customer_id: invoice.customer_id,
     amount:invoice.total,
-    invoice_id:invoice.invoice_id
+    invoice_id:invoice.invoice_id,
+    to_acc_no:invoice.cf_to_acc_no
 })]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
 		<foreach doc:name="For Each" doc:id="eca9aaf9-5715-431c-9df1-ca2c9a2013ac" collection="#[payload]">
+			<set-variable variableName="toAccNumberData" value="#[payload.to_acc_no]" doc:name="sender account number"/>
 			<set-variable variableName="amountData" value="#[payload.amount]" doc:name="Amount Variable"/>
 			<set-variable variableName="customerIdData" value="#[payload.customer_id]" doc:name="Customer Id Variable"/>
 			<set-variable variableName="invoiceIdData" value="#[payload.invoice_id]" doc:name="Invoice Id Variable"/>
@@ -68,9 +69,12 @@ FROM
     cc_customers
 LEFT JOIN 
     cc_customers_bank_details ON cc_customers.bank_acc_no = cc_customers_bank_details.id
+LEFT JOIN 
+   	cc_controller_bank on cc_controller_bank.acc_no  = :controllerAccountNumber
 WHERE 
     cc_customers.id = :customerId;]]></db:sql>
-			<db:input-parameters><![CDATA[#[{'customerId':payload.customer_id
+			<db:input-parameters><![CDATA[#[{'customerId':payload.customer_id,
+'controllerAccountNumber':payload.to_acc_no
 }]]]></db:input-parameters>
 		</db:select>
 			<ee:transform doc:name="Transform Message" doc:id="b96f5569-8ac1-4254-90a3-b322d10a68a5">
@@ -81,13 +85,44 @@ output application/json
 (payload map ((item) -> item ++ {"amount": vars.amountData}))[0]]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
-		<choice doc:name="Condition">
+		<set-variable value="#[payload.bank_acc_no]" doc:name="Set customer account no" doc:id="870eba18-3c24-4196-8ac2-cc766d1fdedc" variableName="customerAccountNumData"/>
+			<choice doc:name="Condition">
 				<when expression="#[payload != null and payload.acc_balance != null and payload.amount != null and payload.acc_balance as Number > payload.amount as Number]">
                     <db:update doc:name="Update Bank Account Balance" doc:id="be2b212b-fcaa-4126-a923-f6517a7be6fb" config-ref="Database_Config">
                         <db:sql><![CDATA[UPDATE cc_customers_bank_details SET acc_balance = acc_balance - :amount WHERE id = :bank_acc_no]]></db:sql>
                         <db:input-parameters><![CDATA[#[{'amount': payload.amount, 'bank_acc_no': payload.bank_acc_no}]]]></db:input-parameters>
                     </db:update>
-                    <set-payload value="#[{'invoice_id':vars.invoiceIdData,&#10;'customer_id': vars.customerIdData,&#10; 'status':'Updated'}]" doc:name="Set updated Payload"/>
+					<db:insert doc:name="Create debited transaction log" doc:id="c610a630-d48c-491e-ac12-6b79aa759e15" config-ref="Database_Config">
+						<db:sql ><![CDATA[INSERT INTO cc_transaction_logs (from_acc, to_acc, trans_type, amount, acc_no, invoice_id, status, created_by, updated_by)
+VALUES (:from_acc, :to_acc, :trans_type, :amount, :acc_no, :invoice_id, 'ACTIVE', 'SYSTEM', 'SYSTEM');
+]]></db:sql>
+						<db:input-parameters ><![CDATA[#[{'from_acc':vars.customerAccountNumData,
+	'to_acc':vars.toAccNumberData,
+	'trans_type':'DEBITED',
+	'amount':vars.amountData,
+	'acc_no':vars.customerAccountNumData,
+	'invoice_id':vars.invoiceIdData
+}]]]></db:input-parameters>
+					</db:insert>
+					<db:update doc:name="Update in controller bank" doc:id="0769bf05-3caf-4b7c-acb7-5ff70bcc27f8" config-ref="Database_Config">
+						<db:sql ><![CDATA[update cc_controller_bank SET acc_balance = acc_balance + :amount WHERE acc_no = :accountNumber]]></db:sql>
+						<db:input-parameters ><![CDATA[#[{'amount':vars.amountData,
+	'accountNumber':vars.toAccNumberData
+}]]]></db:input-parameters>
+					</db:update>
+					<db:insert doc:name="Create credited transaction log" doc:id="c610a630-d48c-491e-ac12-6b79aa759e15" config-ref="Database_Config">
+						<db:sql ><![CDATA[INSERT INTO cc_transaction_logs (from_acc, to_acc, trans_type, amount, acc_no, invoice_id, status, created_by, updated_by)
+VALUES (:from_acc, :to_acc, :trans_type, :amount, :acc_no, :invoice_id, 'ACTIVE', 'SYSTEM', 'SYSTEM');
+]]></db:sql>
+						<db:input-parameters ><![CDATA[#[{'from_acc':vars.customerAccountNumData,
+	'to_acc':vars.toAccNumberData,
+	'trans_type':'CREDITED',
+	'amount':vars.amountData,
+	'acc_no':vars.toAccNumberData,
+	'invoice_id':vars.invoiceIdData
+}]]]></db:input-parameters>
+					</db:insert>
+					<set-payload value="#[{'invoice_id':vars.invoiceIdData,&#10;'customer_id': vars.customerIdData,&#10; 'status':'Updated'}]" doc:name="Set updated Payload"/>
                 </when>
                 <otherwise>
                     <set-payload value="#[{'invoice_id':vars.invoiceIdData,&#10;'customer_id': vars.customerIdData,&#10; 'status':'Not updated'}]" doc:name="Not updated Payload"/>
