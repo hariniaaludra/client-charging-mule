@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+<mule xmlns:quartz="http://www.mulesoft.org/schema/mule/quartz"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
 	xmlns:http="http://www.mulesoft.org/schema/mule/http"
-	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/quartz http://www.mulesoft.org/schema/mule/quartz/current/mule-quartz.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
@@ -15,13 +17,25 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 	<db:config name="Database_Config" doc:name="Database Config" doc:id="5e789387-5165-4936-8e3b-0f3685e6fc95" >
 		<db:my-sql-connection host="localhost" port="3306" user="root" password="root" database="client-charging" />
 	</db:config>
+	
+	<flow name="cron-triggered-flow">
+    <scheduler doc:name="Scheduler" doc:id="574d36d8-f26e-4612-a4b9-d1f4dd7fcd89" >
+			<scheduling-strategy >
+				<cron expression="0 13 10 1/1 * ? *"/>
+			</scheduling-strategy>
+		</scheduler>
+		<logger level="INFO" doc:name="Logger" doc:id="5366fae3-9fad-4b48-be3f-a99bf4674cfe" message="job startted"/>
+		<flow-ref name="client_chargingFlow" />
+</flow>
+
 	<flow name="client_chargingFlow" doc:id="7d6b2129-a869-4b3a-b5a5-d2eee1271da4" >
-		<http:listener doc:name="Listener" doc:id="bf704cf3-ca1c-4e92-bf03-fc941daa1b6f" config-ref="HTTP_Listener_config" path="/getinvoices"/>
-		<http:request method="GET" doc:name="get invoice" doc:id="ff785247-f21d-4349-838e-22f4e9beefee" config-ref="HTTP_Request_configuration" path="/invoices" sendBodyMode="ALWAYS">
+	
+	<http:listener doc:name="Listener" doc:id="caf23c90-02e8-4d43-9331-23c33587211f" config-ref="HTTP_Listener_config" path="/getinvoices"/>
+      	<http:request method="GET" doc:name="get invoice" doc:id="ff785247-f21d-4349-838e-22f4e9beefee" config-ref="HTTP_Request_configuration" path="/invoices" sendBodyMode="ALWAYS">
 			<http:headers ><![CDATA[#[output application/java
 ---
 {
-	"Authorization" : "Zoho-oauthtoken 1000.acd82e2fb1b02644f97a283679fdaf24.7136ae5b8b67c2caaf4401e44d12d3fb"
+	"Authorization" : "Zoho-oauthtoken 1000.ad8993861bcf13d5ccd4f1c8524d7076.42d46c0206955953c172c8184fc54340"
 }]]]></http:headers>
 			<http:query-params ><![CDATA[#[output application/java
 ---
