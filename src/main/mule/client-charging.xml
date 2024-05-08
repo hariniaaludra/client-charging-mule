@@ -15,12 +15,12 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 		<http:request-connection host="www.zohoapis.in" />
 	</http:request-config>
 	<db:config name="Database_Config" doc:name="Database Config" doc:id="5e789387-5165-4936-8e3b-0f3685e6fc95" >
-		<db:my-sql-connection host="localhost" port="3306" user="root" password="root" database="client-charging" />
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="root" database="sys" />
 	</db:config>
 	<flow name="cron-triggered-flow">
     <scheduler doc:name="Scheduler" doc:id="574d36d8-f26e-4612-a4b9-d1f4dd7fcd89" >
 			<scheduling-strategy >
-				<cron expression="0 13 10 1/1 * ? *"/>
+				<cron expression="0 0 10 1/1 * ? *"/>
 			</scheduling-strategy>
 		</scheduler>
 		<logger level="INFO" doc:name="Logger" doc:id="5366fae3-9fad-4b48-be3f-a99bf4674cfe" message="job startted"/>
@@ -34,7 +34,7 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 			<http:headers ><![CDATA[#[output application/java
 ---
 {
-	"Authorization" : "Zoho-oauthtoken 1000.752390a272381e79a63437d0685203aa.83198aeda70b771a577a53453874fc29"
+	"Authorization" : "Zoho-oauthtoken 1000.18e08e370487477fc70ec4be8a25f171.841be6a3515904c2f12a0954e5b97bf6"
 }]]]></http:headers>
 			<http:query-params ><![CDATA[#[output application/java
 ---
@@ -61,20 +61,20 @@ payload.invoices map ((invoice) -> {
 			<set-variable variableName="customerIdData" value="#[payload.customer_id]" doc:name="Customer Id Variable"/>
 			<set-variable variableName="invoiceIdData" value="#[payload.invoice_id]" doc:name="Invoice Id Variable"/>
 			<db:select doc:name="get customer record" doc:id="5439088f-d25c-43f2-b6bb-6b1be8d6d1cd" config-ref="Database_Config">
-			<db:sql><![CDATA[
-SELECT 
+			<db:sql><![CDATA[SELECT 
     cc_customers.*,
-    cc_customers_bank_details.acc_balance
+    cc_customers_bank_details.acc_balance,
+    cc_controller_bank.id as controller_bank_id
 FROM 
     cc_customers
 LEFT JOIN 
-    cc_customers_bank_details ON cc_customers.bank_acc_no = cc_customers_bank_details.id
-LEFT JOIN 
-   	cc_controller_bank on cc_controller_bank.acc_no  = :controllerAccountNumber
+    cc_customers_bank_details ON cc_customers.bank_acc_no = cc_customers_bank_details.id and cc_customers_bank_details.status = 'ACTIVE'
+LEFT JOIN
+	cc_controller_bank on cc_controller_bank.acc_no = :BankAccountNumber and cc_controller_bank.status = 'ACTIVE'
 WHERE 
-    cc_customers.id = :customerId;]]></db:sql>
+    cc_customers.id = :customerId AND cc_customers.status = 'ACTIVE']]></db:sql>
 			<db:input-parameters><![CDATA[#[{'customerId':payload.customer_id,
-'controllerAccountNumber':payload.to_acc_no
+'BankAccountNumber':payload.to_acc_no
 }]]]></db:input-parameters>
 		</db:select>
 			<ee:transform doc:name="Transform Message" doc:id="b96f5569-8ac1-4254-90a3-b322d10a68a5">
@@ -87,8 +87,8 @@ output application/json
 		</ee:transform>
 		<set-variable value="#[payload.bank_acc_no]" doc:name="Set customer account no" doc:id="870eba18-3c24-4196-8ac2-cc766d1fdedc" variableName="customerAccountNumData"/>
 			<choice doc:name="Condition">
-				<when expression="#[payload != null and payload.acc_balance != null and payload.amount != null and payload.acc_balance as Number > payload.amount as Number]">
-                    <db:update doc:name="Update Bank Account Balance" doc:id="be2b212b-fcaa-4126-a923-f6517a7be6fb" config-ref="Database_Config">
+				<when expression="#[payload != null and payload.acc_balance != null and payload.amount != null and payload.controller_bank_id != null and payload.acc_balance as Number > payload.amount as Number]">
+					<db:update doc:name="Update Bank Account Balance" doc:id="be2b212b-fcaa-4126-a923-f6517a7be6fb" config-ref="Database_Config">
                         <db:sql><![CDATA[UPDATE cc_customers_bank_details SET acc_balance = acc_balance - :amount WHERE id = :bank_acc_no]]></db:sql>
                         <db:input-parameters><![CDATA[#[{'amount': payload.amount, 'bank_acc_no': payload.bank_acc_no}]]]></db:input-parameters>
                     </db:update>
@@ -125,12 +125,20 @@ VALUES (:from_acc, :to_acc, :trans_type, :amount, :acc_no, :invoice_id, 'ACTIVE'
 					<set-payload value="#[{'invoice_id':vars.invoiceIdData,&#10;'customer_id': vars.customerIdData,&#10; 'status':'Updated'}]" doc:name="Set updated Payload"/>
                 </when>
                 <otherwise>
-                    <set-payload value="#[{'invoice_id':vars.invoiceIdData,&#10;'customer_id': vars.customerIdData,&#10; 'status':'Not updated'}]" doc:name="Not updated Payload"/>
+					<set-payload value="#[if(payload == null) 
+{'invoice_id':vars.invoiceIdData,'customer_id': vars.customerIdData, 'status':'No account for the customer'} 
+else if(payload != null and payload.acc_balance == null) 
+{'invoice_id':vars.invoiceIdData,'customer_id': vars.customerIdData, 'status':'No bank account for the customer'}
+else if(payload != null and payload.controller_bank_id == null) 
+{'invoice_id':vars.invoiceIdData,'customer_id': vars.customerIdData, 'status':'Sender Account is invalid'}
+else if(payload != null and payload.acc_balance != null and payload.amount != null and payload.acc_balance as Number &lt; payload.amount as Number) 
+{'invoice_id':vars.invoiceIdData,'customer_id': vars.customerIdData, 'status':'Not updated due to insufficient balance'} 
+else 
+{'invoice_id':vars.invoiceIdData,'customer_id': vars.customerIdData, 'status':'Not updated due to technical issue'}]" doc:name="Not updated Payload"/>
                 </otherwise>
             </choice>
 		 <set-variable variableName="customerData" value="#[if (vars.customerData != null) (vars.customerData default []) ++ [payload] else [payload]]" />
-
 		</foreach>
-		<set-payload value="#[vars.customerData]" />
+		<set-payload value="#[%dw 2.0&#10;output application/json&#10;---&#10;if (vars.customerData != null) vars.customerData else { 'message': 'No records found' }]" />
 	</flow>
 </mule>
