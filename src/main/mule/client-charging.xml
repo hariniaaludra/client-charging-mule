@@ -79,6 +79,17 @@ payload.invoices map ((invoice) -> {
 				doc:name="Invoice Id Variable"
 				doc:id="7af36074-4f89-4e13-ab9b-5817789b0132"
 				variableName="invoiceIdData" />
+				 <!-- Check for duplicate invoice records -->
+        <db:select doc:name="Check duplicate invoice record" doc:id="0323c1f9-a63b-4cdd-ae2d-e7db329f34c0" config-ref="Database_Config">
+            <db:sql><![CDATA[SELECT * FROM cc_transaction_logs WHERE invoice_id = :invoiceId]]></db:sql>
+            <db:input-parameters><![CDATA[#[{'invoiceId': vars.invoiceIdData}]]]></db:input-parameters>
+        </db:select>
+        <choice doc:name="Check if invoice record exists" doc:id="9b4f0c04-641c-45e9-a33d-06443bdd4d04">
+            <!-- Handle if invoice record already exists -->
+            <when expression="#[payload != null and not isEmpty(payload)]">
+              <set-payload value="#[{'invoice_id':vars.invoiceIdData, 'status': 'Invoice record already updated'}]" doc:name="Set already updated Payload" doc:id="1726e934-6ec4-4269-a533-ce72ab313ccd" />   
+            </when>
+            <otherwise>
 			<db:select doc:name="get customer record"
 				doc:id="362d0d11-ab1e-4fc0-b331-56e01360254e"
 				config-ref="Database_Config">
@@ -94,8 +105,8 @@ LEFT JOIN
 	cc_controller_bank on cc_controller_bank.acc_no = :BankAccountNumber and cc_controller_bank.status = 'ACTIVE'
 WHERE 
     cc_customers.id = :customerId AND cc_customers.status = 'ACTIVE']]></db:sql>
-				<db:input-parameters><![CDATA[#[{'customerId':payload.customer_id,
-'BankAccountNumber':payload.to_acc_no
+				<db:input-parameters><![CDATA[#[{'customerId':vars.customerIdData,
+'BankAccountNumber':vars.toAccNumberData
 }]]]></db:input-parameters>
 			</db:select>
 			<ee:transform doc:name="Transform Message"
@@ -111,6 +122,7 @@ output application/json
 				doc:name="Set customer account no"
 				doc:id="4d4a5830-29b2-42dc-9164-e1d97fcbf546"
 				variableName="customerAccountNumData" />
+			
 			<choice doc:name="Condition"
 				doc:id="4d08e503-9be9-4f2b-bca7-977ecb0489cf">
 				<when
@@ -169,6 +181,8 @@ VALUES (:from_acc, :to_acc, :trans_type, :amount, :acc_no, :invoice_id, 'ACTIVE'
 						doc:id="1077d42e-a575-4cd4-9d5d-61cfe0946532" />
 				</otherwise>
 			</choice>
+			</otherwise>
+		</choice>
 			<set-variable
 				value="#[if (vars.customerData != null) (vars.customerData default []) ++ [payload] else [payload]]"
 				doc:name="Set Variable"
@@ -196,7 +210,7 @@ VALUES (:from_acc, :to_acc, :trans_type, :amount, :acc_no, :invoice_id, 'ACTIVE'
 		<http:request method="POST"
 			doc:name="Request authorization code"
 			doc:id="1a5ae9a9-2d9d-45a1-94c5-e69539a450dc"
-			url="https://api-console.zoho.in/oauthapi/v1/selfclient/1000.K2ED5FEJNARFWDV2O2W3Q7QK1Q2GJG/granttoken">
+			url="https://api-console.zoho.in/oauthapi/v1/selfclient/1000.Q999RRE0B0S030JTFRT2IQL17S6XTS/granttoken">
 			<http:body><![CDATA[#[output application/json
     ---
     {
@@ -223,9 +237,9 @@ VALUES (:from_acc, :to_acc, :trans_type, :amount, :acc_no, :invoice_id, 'ACTIVE'
     "Accept-Language": "en-US,en;q=0.9",
     "Content-Type": "application/json",
     "X-Requested-With": "XMLHttpRequest",
-    "Cookie": "zohocares-_uuid=f3b62a75-5f90-47da-835d-af2fa7416835_d266; zohocares-_zldp=YfEOFpfOAG%2B4Ou1uL02sxm0d3Ln5rcdQ%2F8XG%2B76QFfUSCrpukMK1vcTG2E%2F6UClmTPnJ%2FBYY4Go%3D; cookie-uid=\"282f6078-ac05-4418-8c4d-5c7b7090f4bc_d221\"; 5817893107=\"776a78801cb78975a802433848e67bfc\"; ZohoMarkRef=\"https://www.zoho.com/connect/api/authentication.html\"; ZohoMarkSrc=\"google:zoho|google:connect|google:connect\"; JSESSIONID=\"071FA2943FBE7FCB1177625A36C3650B\"; _iamadt=\"078ac7ba8ef0a71e18ecc3440e2353fc2c74dd5f891c898f2d24181b499e2cee949b5ff8c06f2934e2bca8072446cdc9bae301c79635d7d46ad3d49a7c01902c\"; _iambdt=\"7971e2f7741de1491eedb8b9984b1a61248a70bcfd6ca708e424515ba9349a3c8676db3a40dab92549a66d88975fe7849857529f288e74265764d4a869d09440\"; iamcsr=\"e21ee598ed63e355aebfc9d197321b2070d80399e5aedc1586cd1fbd34f4368ebadc153fe2099eec25b293660a67434d65272a45c5a47b04f46b5c3b3cf75f46\"; _zcsr_tmp=\"e21ee598ed63e355aebfc9d197321b2070d80399e5aedc1586cd1fbd34f4368ebadc153fe2099eec25b293660a67434d65272a45c5a47b04f46b5c3b3cf75f46\"",
+    "Cookie": "zohocares-_zldp=YfEOFpfOAG8Hdr41EhRCCZDHiHFENYf6LRfwpZUdoaiQbcq505u%2BFfYjkZb8Wu58TPnJ%2FBYY4Go%3D; zohocares-_uuid=1b2f3139-05c3-4c7f-a6d2-987859d54589_d266; ZohoMarkRef=\"https://www.zoho.com/marketplace/help-guide/zoho-developer-console.html\"; ZohoMarkSrc=\"google:creator|google:marketplace|google:marketplace\"; cookie-uid=\"02619ebc-ed24-47a8-a287-28421fe111ae_d264\"; 5817893107=\"776a78801cb78975a802433848e67bfc\"; _iamadt=\"fef647af07abcc9c17e15222dec7ba4878c2d671274f4e3e648cf3ffc098a85f600bd96db2a0e929bade45d7f14ab29b6f8819e1cca672520f990e4dd5d651a1\"; _iambdt=\"3e93625b3894096a3302876fc09994602ee55c58c76b572e9fbce5f8a7ed8100ae62169b14c6abd0b59beff434ecc76b4e4cd33dd5ab37dec123b15ed7d75539\"; iamcsr=\"b99f851fe5bda586f647bb5d280d849ab243872d6d4f14d6fcedc332b38a364a86c9363ea0f82d2ba98166809278af26887d22fb1f1e192ccf4964409afc3d57\"; _zcsr_tmp=\"b99f851fe5bda586f647bb5d280d849ab243872d6d4f14d6fcedc332b38a364a86c9363ea0f82d2ba98166809278af26887d22fb1f1e192ccf4964409afc3d57\"; zohocares-_zldt=\"f127a16b-276e-47e4-95e2-916a56ca112b-2\"; wms-tkp-token=\"60029138469-7885d612-ad2ee441ec1c3907e43e099cdc4fbcc2\"; JSESSIONID=\"62461B98DE8816C1E55B4B3926561A8E\"",
     "Sec-Fetch-Site": "same-origin",
-    "X-ZCSRF-TOKEN": "iamcsrcoo=e21ee598ed63e355aebfc9d197321b2070d80399e5aedc1586cd1fbd34f4368ebadc153fe2099eec25b293660a67434d65272a45c5a47b04f46b5c3b3cf75f46",
+    "X-ZCSRF-TOKEN": "iamcsrcoo=b99f851fe5bda586f647bb5d280d849ab243872d6d4f14d6fcedc332b38a364a86c9363ea0f82d2ba98166809278af26887d22fb1f1e192ccf4964409afc3d57",
     "sec-ch-ua-mobile": "?0"
 }]]]></http:headers>
 
@@ -254,10 +268,10 @@ output application/json
 ---
 {
 	"redirect_uri" : "https://www.google.com/",
-	"client_secret" : "34f0b1ee3cfdb9b9c3a958ec0534c03848b0d320cb",
+	"client_secret" : "5ac54699bf8565c6eeed8897a44f2ae8a3ee8c99b3",
 	"code" : vars.grantToken,
 	"grant_type" : "authorization_code",
-	"client_id" : "1000.K2ED5FEJNARFWDV2O2W3Q7QK1Q2GJG"
+	"client_id" : "1000.Q999RRE0B0S030JTFRT2IQL17S6XTS"
 }]]]></http:query-params>
 		</http:request>
 		<ee:transform doc:name="Transform Message"
@@ -320,9 +334,9 @@ payload]]></ee:set-payload>
 {
 	"redirect_uri" : "https://www.google.com/",
 	"refresh_token" : vars.refresh_token,
-	"client_secret" : "34f0b1ee3cfdb9b9c3a958ec0534c03848b0d320cb",
+	"client_secret" : "5ac54699bf8565c6eeed8897a44f2ae8a3ee8c99b3",
 	"grant_type" : "refresh_token",
-	"client_id" : "1000.K2ED5FEJNARFWDV2O2W3Q7QK1Q2GJG"
+	"client_id" : "1000.Q999RRE0B0S030JTFRT2IQL17S6XTS"
 }]]]></http:query-params>
 		</http:request>
 		<set-variable value="#[payload.access_token]"
