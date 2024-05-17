@@ -26,7 +26,7 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 			host="www.zohoapis.in" />
 	</http:request-config>
 	<db:config name="Database_Config" doc:name="Database Config"
-		doc:id="1be22306-0523-4fee-a6de-3b33f867a47b">
+		doc:id="0323c1f9-a63b-4cdd-ae2d-e7db329f34c0" queryTimeout="0" input-parameters="#[{'invoiceId': vars.invoiceIdData}]" sql="SELECT * FROM cc_transaction_logs WHERE invoice_id = :invoiceId" transactionalAction="JOIN_IF_POSSIBLE" config-ref="Database_Config" targetValue="#[payload]" queryTimeoutUnit="SECONDS" fetchSize="" errorMappings="" target="" maxRows="">
 		<db:my-sql-connection host="localhost"
 			port="3306" user="root" password="root" database="client-charging" />
 	</db:config>
@@ -80,7 +80,7 @@ payload.invoices map ((invoice) -> {
 				doc:id="7af36074-4f89-4e13-ab9b-5817789b0132"
 				variableName="invoiceIdData" />
 				 <!-- Check for duplicate invoice records -->
-        <db:select doc:name="Check duplicate invoice record" doc:id="0323c1f9-a63b-4cdd-ae2d-e7db329f34c0" config-ref="Database_Config">
+        <db:select doc:name="Check duplicate invoice record" doc:id="0323c1f9-a63b-4cdd-ae2d-e7db329f34c0" config-ref="Database_Config1">
             <db:sql><![CDATA[SELECT * FROM cc_transaction_logs WHERE invoice_id = :invoiceId]]></db:sql>
             <db:input-parameters><![CDATA[#[{'invoiceId': vars.invoiceIdData}]]]></db:input-parameters>
         </db:select>
@@ -92,7 +92,7 @@ payload.invoices map ((invoice) -> {
             <otherwise>
 			<db:select doc:name="get customer record"
 				doc:id="362d0d11-ab1e-4fc0-b331-56e01360254e"
-				config-ref="Database_Config">
+				config-ref="Database_Config1">
 				<db:sql><![CDATA[SELECT 
     cc_customers.*,
     cc_customers_bank_details.acc_balance,
@@ -129,13 +129,13 @@ output application/json
 					expression="#[payload != null and payload.acc_balance != null and payload.amount != null and payload.controller_bank_id != null and payload.acc_balance as Number &gt; payload.amount as Number]">
 					<db:update doc:name="Update Bank Account Balance"
 						doc:id="e2bb2055-c582-45e6-af23-5c36dd5fdc76"
-						config-ref="Database_Config">
+						config-ref="Database_Config1">
 						<db:sql><![CDATA[UPDATE cc_customers_bank_details SET acc_balance = acc_balance - :amount WHERE id = :bank_acc_no]]></db:sql>
 						<db:input-parameters><![CDATA[#[{'amount': payload.amount, 'bank_acc_no': payload.bank_acc_no}]]]></db:input-parameters>
 					</db:update>
 					<db:insert doc:name="Create debited transaction log"
 						doc:id="9e01e779-a438-40ff-870d-dd35d1f86e20"
-						config-ref="Database_Config">
+						config-ref="Database_Config1">
 						<db:sql><![CDATA[INSERT INTO cc_transaction_logs (from_acc, to_acc, trans_type, amount, acc_no, invoice_id, status, created_by, updated_by)
 VALUES (:from_acc, :to_acc, :trans_type, :amount, :acc_no, :invoice_id, 'ACTIVE', 'SYSTEM', 'SYSTEM');
 ]]></db:sql>
@@ -149,7 +149,7 @@ VALUES (:from_acc, :to_acc, :trans_type, :amount, :acc_no, :invoice_id, 'ACTIVE'
 					</db:insert>
 					<db:update doc:name="Update in controller bank"
 						doc:id="05980c7c-a156-44df-b4b3-f7d8fef82bd2"
-						config-ref="Database_Config">
+						config-ref="Database_Config1">
 						<db:sql><![CDATA[update cc_controller_bank SET acc_balance = acc_balance + :amount WHERE acc_no = :accountNumber]]></db:sql>
 						<db:input-parameters><![CDATA[#[{'amount':vars.amountData,
 	'accountNumber':vars.toAccNumberData
@@ -157,7 +157,7 @@ VALUES (:from_acc, :to_acc, :trans_type, :amount, :acc_no, :invoice_id, 'ACTIVE'
 					</db:update>
 					<db:insert doc:name="Create credited transaction log"
 						doc:id="8e3b845f-c35c-46ea-857c-ac3e23608963"
-						config-ref="Database_Config">
+						config-ref="Database_Config1">
 						<db:sql><![CDATA[INSERT INTO cc_transaction_logs (from_acc, to_acc, trans_type, amount, acc_no, invoice_id, status, created_by, updated_by)
 VALUES (:from_acc, :to_acc, :trans_type, :amount, :acc_no, :invoice_id, 'ACTIVE', 'SYSTEM', 'SYSTEM');
 ]]></db:sql>

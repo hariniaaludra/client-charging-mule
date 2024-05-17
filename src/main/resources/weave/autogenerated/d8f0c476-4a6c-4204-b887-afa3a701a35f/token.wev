@@ -1,0 +1,4 @@
+%dw 2.0
+
+type auto_d8f0c476_4a6c_4204_b887_afa3a701a35f_Output_Variables_refresh_api_access_token = Any
+

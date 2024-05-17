@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:core="http://www.mulesoft.org/schema/mule/core" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<http:listener-config name="HTTP_Listener_config1" doc:name="HTTP Listener config" doc:id="530e102f-cacb-416c-bd23-ff1569d1d397" >
+		<http:listener-connection host="0.0.0.0" port="8082" />
+	</http:listener-config>
+		<os:object-store name="Object_store" doc:name="Object store" doc:id="6f022562-df8d-4e32-a116-90068eee8829" entryTtl="5000000" expirationInterval="3" />
+	
+<ee:object-store-caching-strategy name="Caching_Strategy" doc:name="Caching Strategy" doc:id="a3745e35-8239-4c92-a92e-441432fc7a24" entryTTL="5000000" synchronized="false" keyGenerationExpression="#['cacheKey']" objectStore="Object_store"/>
+  
+	<ee:object-store-caching-strategy name="Caching_Strategy1" doc:name="Caching Strategy" doc:id="7d993003-aec0-4a1a-a2cf-4c3def04fced" keyGenerationExpression="#['refreshCacheKey']" objectStore="Object_store"/>
+	<db:config name="Database_Config1" doc:name="Database Config" doc:id="af9ba5bb-3bd2-4472-b0fc-5ccf9094444d" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="root" database="client-charging" />
+	</db:config>
+	<flow name="cache-client_chargingFlow" doc:id="78faea64-f9e6-4083-9996-a21906b6ff1f" >
+		<http:listener doc:name="Listener" doc:id="5c7f8cf3-c3ad-4dad-83cd-706272537027" config-ref="HTTP_Listener_config1" path="/getinvoices"/>
+		<flow-ref name="cache-generate-access-token" doc:name="cache-generate-access-token Flow"/>
+		<set-variable value="#[payload.refresh_token]" doc:name="Set refresh token Variable" doc:id="8d7ddb99-2060-411d-bfc5-acdf66a2bd8b" variableName="refreshToken" />
+		<flow-ref doc:name="call-get-invoice Flow" doc:id="1b7ac6c8-5af0-4626-9f8e-323eb9470e29" name="call-get-invoice"/>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="3a590daf-82ac-45f3-bc82-19eae5b45f6b" type=" HTTP:UNAUTHORIZED" >
+				<logger level="ERROR" doc:name="Logger" doc:id="b7c21dc2-229b-43bb-b56a-d42b128d2035" message="Unauthorized error handled" />
+					<ee:invalidate-key doc:name="Remove cache" doc:id="af1a817d-f78a-4170-acd0-c73be2eaf580" cachingStrategy-ref="Caching_Strategy" keyGenerationExpression="#['cacheKey']" />
+				<set-variable value="#['REFRESH']" doc:name="set REFRESH value" doc:id="85211396-70a1-4bd8-a396-a2d4d51aabbc" variableName="tokenCondition" />
+				<flow-ref doc:name="cache-generate-access-token Flow" doc:id="a14bf65b-c376-4732-ae1e-9e6531c07c61" name="cache-generate-access-token" />
+				<flow-ref doc:name="refresh-token-invoice-call Flow" doc:id="fa9096ce-122e-4f33-8fd6-d56d409e86d4" name="refresh-token-invoice-call"/>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<flow name="refresh-token-invoice-call" doc:id="266add19-7d45-4e8d-8fed-4cd67e61b112">
+		<flow-ref doc:name="call-get-invoice Flow" doc:id="c5a8d087-a6d3-4a60-b3bd-4d8d2fba78d3" name="call-get-invoice" />
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="ed25074d-e087-4df5-8af3-4c00052dbb0d" type=" HTTP:UNAUTHORIZED" >
+				<ee:invalidate-key doc:name="Invalidate Key" doc:id="bf998ac7-50da-490f-8d39-e5495abfbfc5" cachingStrategy-ref="Caching_Strategy" keyGenerationExpression="#['cacheKey']" />
+				<set-variable value="#[null]" doc:name="Set Variable" doc:id="fda6f272-a91d-4a1e-92ba-e995f326b1af" variableName="tokenCondition" />
+				<flow-ref doc:name="cache-generate-access-token Flow" doc:id="3e52082e-ecef-4438-a0df-db340fbc007e" name="cache-generate-access-token"/>
+				<flow-ref doc:name="call-get-invoice Flow" doc:id="d09b7b20-7797-4de7-b105-7b5393ec1b69" name="call-get-invoice" />
+
+		</on-error-continue>
+		</error-handler >
+	</flow>
+	<flow name="cache-generate-access-token" doc:id="d8f0c476-4a6c-4204-b887-afa3a701a35f" >
+		<ee:cache doc:name="Cache" doc:id="0d379e23-83b8-4d23-81b7-9174dc35b132" cachingStrategy-ref="Caching_Strategy">
+			<choice doc:name="Choice" doc:id="dadc148a-7e76-406d-b90a-d42b27ead3a7" >
+				<when expression="vars.tokenCondition == null">
+					<flow-ref doc:name="cache-code-access-token Flow" doc:id="fff79b43-9250-48d5-9480-0179d10241e4" name="cache-code-access-token"/>
+				</when>
+				<otherwise >
+					<logger level="INFO" doc:name="Logger" doc:id="2303c992-8f67-48f9-913f-f848b3c08f3d" message="refresh_token variable: #[vars.refresh_token]" />
+					<http:request method="POST" doc:name="Referesh token request" doc:id="cea7e76d-4625-44e2-baa3-61798b53afb7" config-ref="HTTP_Request_configuration1" path="/token">
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	"redirect_uri" : "https://www.google.com/",
+	"refresh_token" : vars.refreshToken,
+	"client_secret" : "5ac54699bf8565c6eeed8897a44f2ae8a3ee8c99b3",
+	"grant_type" : "refresh_token",
+	"client_id" : "1000.Q999RRE0B0S030JTFRT2IQL17S6XTS"
+}]]]></http:query-params>
+		</http:request>
+					<ee:transform doc:name="Transform Message" doc:id="55c4dec2-bb93-4fce-a1cc-ea5c4585f5dd">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{
+    "access_token": payload.access_token,
+    "refresh_token": vars.refreshToken,
+    "scope": payload.scope,
+    "api_domain": payload.api_domain,
+    "token_type": payload.token_type,
+    "expires_in": payload.expires_in
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<logger level="INFO" doc:name="Logger" doc:id="c03541eb-16eb-42c9-9ad3-c1a0e9dffb40" message="refresh access token : #[vars.refreshAccessToken]" />
+				</otherwise>
+			</choice>
+		</ee:cache>
+	</flow>
+	<flow name="cache-code-access-token" doc:id="1f44afd9-1518-48fe-8adf-305a7071b6ce">
+		<http:request method="POST" doc:name="Request authorization code" doc:id="beeccaa6-0ac8-42ea-96c9-b390dade7e2d" url="https://api-console.zoho.in/oauthapi/v1/selfclient/1000.Q999RRE0B0S030JTFRT2IQL17S6XTS/granttoken">
+			<http:body><![CDATA[#[output application/json
+    ---
+    {
+    "granttoken": {
+        "scope": [
+            "ZohoBooks.fullaccess.all"
+        ],
+        "expiry": 10,
+        "description": "test"
+    }
+}]]]></http:body>
+			<http:headers><![CDATA[#[output application/java
+    ---
+    {
+    "Cookie": "zohocares-_uuid=f3b62a75-5f90-47da-835d-af2fa7416835_d266; zohocares-_zldp=YfEOFpfOAG%2B4Ou1uL02sxm0d3Ln5rcdQ%2F8XG%2B76QFfUSCrpukMK1vcTG2E%2F6UClmTPnJ%2FBYY4Go%3D; 5817893107=776a78801cb78975a802433848e67bfc; zohocares-_zldt=879f414f-e11d-42b4-8cab-88dd9ecf6d1b-2; JSESSIONID=23F001030216CA53BB807EDF21DF1FB1; _iamadt=fef647af07abcc9c17e15222dec7ba489aa24abec28b5004f38886ddf73ae2b823dfb682bc949d0eed374527fca11f91815a687567356dd3c45d9a5c70189532; _iambdt=35c1409da64f5a5704c9fd39f7f62a7cabfa2cc537a9ef15947ce89bf7388a42fdf9b6c61c040488f1f6ac5b27db9bf5cc2dc40793a1d07dd13ed75a10f33b47; iamcsr=be484038e6143b0e31642c25bb58eafdd19239e6c2681da0c87a157f654086df6e558e4955b68b26310fb9790bbaf44a446610f2dcf7fb39891aa82d3f5f6fbd; _zcsr_tmp=be484038e6143b0e31642c25bb58eafdd19239e6c2681da0c87a157f654086df6e558e4955b68b26310fb9790bbaf44a446610f2dcf7fb39891aa82d3f5f6fbd",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "X-ZCSRF-TOKEN": "iamcsrcoo=be484038e6143b0e31642c25bb58eafdd19239e6c2681da0c87a157f654086df6e558e4955b68b26310fb9790bbaf44a446610f2dcf7fb39891aa82d3f5f6fbd"
+}]]]></http:headers>
+		</http:request>
+		<ee:transform doc:name="Transform Response" doc:id="7438fc5e-3aea-4ef6-ac85-64c6751f5c72">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "granttoken": payload.granttoken.Grant_token
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="#[payload.granttoken]" doc:name="Set Grant token" doc:id="f6a9f6ce-af96-4953-891a-9d5e4eea9bb9" variableName="granttoken" />
+		<http:request method="POST" doc:name="Request access token" doc:id="b3bf3364-9255-4901-a776-0fb911a5c8cc" config-ref="HTTP_Request_configuration1" path="/token">
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	"redirect_uri" : "https://www.google.com/",
+	"client_secret" : "5ac54699bf8565c6eeed8897a44f2ae8a3ee8c99b3",
+	"code" : vars.grantToken,
+	"grant_type" : "authorization_code",
+	"client_id" : "1000.Q999RRE0B0S030JTFRT2IQL17S6XTS"
+}]]]></http:query-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="1271de6e-13b6-4aeb-a08a-96d4b69df301">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	
+</flow>
+	<flow name="call-get-invoice" doc:id="1b8a60d2-1e2f-4a15-9fd5-02665eebc5ad" >
+		<http:request method="GET" doc:name="get invoice" doc:id="2c753ea5-d1aa-4b96-b1f9-dbd4b9a4d75a" config-ref="HTTP_Request_configuration" path="/invoices" sendBodyMode="ALWAYS">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Zoho-oauthtoken " ++ payload.access_token
+}]]]></http:headers>
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	"cf_invoice_status" : "unpaid"
+}]]]></http:query-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="d8c42cd3-05c6-4a43-9ab8-f3a7e6f8ec52" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload.invoices map ((invoice) -> {
+    customer_id: invoice.customer_id,
+    amount:invoice.total,
+    invoice_id:invoice.invoice_id,
+    to_acc_no:invoice.cf_to_acc_no
+})]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="4c138484-3c5d-4ae4-87ba-223798362bc4" collection="#[payload]" >
+			<set-variable value="#[payload.to_acc_no]" doc:name="sender account number" doc:id="a81451c5-4e35-4436-84ed-c974d94f0145" variableName="toAccNumberData" />
+			<set-variable value="#[payload.amount]" doc:name="Amount Variable" doc:id="d0ad7328-acc9-420f-8622-11c85a5eddea" variableName="amountData" />
+			<set-variable value="#[payload.customer_id]" doc:name="Customer Id Variable" doc:id="1aae1fb2-b6fa-4766-87a4-d645deae43f7" variableName="customerIdData" />
+			<set-variable value="#[payload.invoice_id]" doc:name="Invoice Id Variable" doc:id="da356cb3-1775-435b-8637-fea5ac705e29" variableName="invoiceIdData" />
+			 <!-- Check for duplicate invoice records -->
+        <db:select doc:name="Check duplicate invoice record" doc:id="efe14e85-9f30-4b55-bc6e-7de438133130" config-ref="Database_Config1">
+            <db:sql><![CDATA[SELECT * FROM cc_transaction_logs WHERE invoice_id = :invoiceId]]></db:sql>
+            <db:input-parameters><![CDATA[#[{'invoiceId': vars.invoiceIdData}]]]></db:input-parameters>
+        </db:select>
+        <choice doc:name="Check if invoice record exists" doc:id="3070c1cf-71a9-446b-a85e-de24a8bcf93d">
+            <!-- Handle if invoice record already exists -->
+            <when expression="#[payload != null and not isEmpty(payload)]">
+              <set-payload value="#[{'invoice_id':vars.invoiceIdData, 'status': 'Invoice record already updated'}]" doc:name="Set already updated Payload" doc:id="27754d72-fbde-461f-a0ea-774f777a4dd5" />   
+            </when>
+            <otherwise>
+			<db:select doc:name="get customer record" doc:id="42431076-d4f0-485f-a3bb-1ca89356b3c0" config-ref="Database_Config1" >
+				<db:sql ><![CDATA[SELECT 
+    cc_customers.*,
+    cc_customers_bank_details.acc_balance,
+    cc_controller_bank.id as controller_bank_id
+FROM 
+    cc_customers
+LEFT JOIN 
+    cc_customers_bank_details ON cc_customers.bank_acc_no = cc_customers_bank_details.id and cc_customers_bank_details.status = 'ACTIVE'
+LEFT JOIN
+	cc_controller_bank on cc_controller_bank.acc_no = :BankAccountNumber and cc_controller_bank.status = 'ACTIVE'
+WHERE 
+    cc_customers.id = :customerId AND cc_customers.status = 'ACTIVE']]></db:sql>
+				<db:input-parameters ><![CDATA[#[{'customerId':vars.customerIdData,
+'BankAccountNumber':vars.toAccNumberData
+}]]]></db:input-parameters>
+			</db:select>
+			<ee:transform doc:name="Transform Message" doc:id="493b41de-a0bb-4e88-8a8a-b461c90f1caf" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+(payload map ((item) -> item ++ {"amount": vars.amountData}))[0]]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<set-variable value="#[payload.bank_acc_no]" doc:name="Set customer account no" doc:id="9dabd77e-0c9b-404d-8a9b-3dae24872cd4" variableName="customerAccountNumData" />
+			<choice doc:name="Condition" doc:id="504dc259-6309-4361-b9dd-de8415d14c6d" >
+				<when expression="#[payload != null and payload.acc_balance != null and payload.amount != null and payload.controller_bank_id != null and payload.acc_balance as Number &gt; payload.amount as Number]" >
+					<db:update doc:name="Update Bank Account Balance" doc:id="1db24106-caf9-4d99-aa0a-325b6e2193eb" config-ref="Database_Config1" >
+						<db:sql ><![CDATA[UPDATE cc_customers_bank_details SET acc_balance = acc_balance - :amount WHERE id = :bank_acc_no]]></db:sql>
+						<db:input-parameters ><![CDATA[#[{'amount': payload.amount, 'bank_acc_no': payload.bank_acc_no}]]]></db:input-parameters>
+					</db:update>
+					<db:insert doc:name="Create debited transaction log" doc:id="0231c8df-3bc7-403e-b32a-4c0d658b16ca" config-ref="Database_Config1" >
+						<db:sql ><![CDATA[INSERT INTO cc_transaction_logs (from_acc, to_acc, trans_type, amount, acc_no, invoice_id, status, created_by, updated_by)
+VALUES (:from_acc, :to_acc, :trans_type, :amount, :acc_no, :invoice_id, 'ACTIVE', 'SYSTEM', 'SYSTEM');
+]]></db:sql>
+						<db:input-parameters ><![CDATA[#[{'from_acc':vars.customerAccountNumData,
+	'to_acc':vars.toAccNumberData,
+	'trans_type':'DEBITED',
+	'amount':vars.amountData,
+	'acc_no':vars.customerAccountNumData,
+	'invoice_id':vars.invoiceIdData
+}]]]></db:input-parameters>
+					</db:insert>
+					<db:update doc:name="Update in controller bank" doc:id="6376cf7c-a146-4923-ac4a-a6249bc87454" config-ref="Database_Config1" >
+						<db:sql ><![CDATA[update cc_controller_bank SET acc_balance = acc_balance + :amount WHERE acc_no = :accountNumber]]></db:sql>
+						<db:input-parameters ><![CDATA[#[{'amount':vars.amountData,
+	'accountNumber':vars.toAccNumberData
+}]]]></db:input-parameters>
+					</db:update>
+					<db:insert doc:name="Create credited transaction log" doc:id="6968f54e-1fea-4d4d-af79-c091060aaf6d" config-ref="Database_Config1" >
+						<db:sql ><![CDATA[INSERT INTO cc_transaction_logs (from_acc, to_acc, trans_type, amount, acc_no, invoice_id, status, created_by, updated_by)
+VALUES (:from_acc, :to_acc, :trans_type, :amount, :acc_no, :invoice_id, 'ACTIVE', 'SYSTEM', 'SYSTEM');
+]]></db:sql>
+						<db:input-parameters ><![CDATA[#[{'from_acc':vars.customerAccountNumData,
+	'to_acc':vars.toAccNumberData,
+	'trans_type':'CREDITED',
+	'amount':vars.amountData,
+	'acc_no':vars.toAccNumberData,
+	'invoice_id':vars.invoiceIdData
+}]]]></db:input-parameters>
+					</db:insert>
+					<set-payload value="#[{'invoice_id':vars.invoiceIdData,&#10;'customer_id': vars.customerIdData,&#10; 'status':'Updated'}]" doc:name="Set updated Payload" doc:id="b77e0f7a-693e-4644-aaa2-24c30a186c67" />
+				</when>
+				<otherwise >
+					<set-payload value="#[if(payload == null) &#10;{'invoice_id':vars.invoiceIdData,'customer_id': vars.customerIdData, 'status':'No account for the customer'} &#10;else if(payload != null and payload.acc_balance == null) &#10;{'invoice_id':vars.invoiceIdData,'customer_id': vars.customerIdData, 'status':'No bank account for the customer'}&#10;else if(payload != null and payload.controller_bank_id == null) &#10;{'invoice_id':vars.invoiceIdData,'customer_id': vars.customerIdData, 'status':'Sender Account is invalid'}&#10;else if(payload != null and payload.acc_balance != null and payload.amount != null and payload.acc_balance as Number &lt; payload.amount as Number) &#10;{'invoice_id':vars.invoiceIdData,'customer_id': vars.customerIdData, 'status':'Not updated due to insufficient balance'} &#10;else &#10;{'invoice_id':vars.invoiceIdData,'customer_id': vars.customerIdData, 'status':'Not updated due to technical issue'}]" doc:name="Not updated Payload" doc:id="8189c998-040e-4337-b2b1-dcdfbd7ea341" />
+				</otherwise>
+			</choice>
+			</otherwise>
+			</choice>
+			<set-variable value="#[if (vars.customerData != null) (vars.customerData default []) ++ [payload] else [payload]]" doc:name="Set Variable" doc:id="6a51c539-37e4-4106-8b3e-fddfaa5ac144" variableName="customerData" />
+		</foreach>
+		<logger level="INFO" doc:name="Logger" doc:id="4d11cd35-2aaf-470d-81a4-ab11677b587f" message="Result : #[vars.customerData]" />
+		<set-payload value="#[%dw 2.0&#10;output application/json&#10;---&#10;if (vars.customerData != null) vars.customerData else { 'message': 'No records found' }]" doc:name="Set Payload" doc:id="7b52382e-833f-4d28-9c04-88da98ce5d50" />
+	</flow>
+</mule>
