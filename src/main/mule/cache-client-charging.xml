@@ -8,7 +8,7 @@ http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/
 http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
 	<http:listener-config name="HTTP_Listener_config1" doc:name="HTTP Listener config" doc:id="530e102f-cacb-416c-bd23-ff1569d1d397" >
-		<http:listener-connection host="0.0.0.0" port="8082" />
+		<http:listener-connection host="0.0.0.0" port="8081" />
 	</http:listener-config>
 		<os:object-store name="Object_store" doc:name="Object store" doc:id="6f022562-df8d-4e32-a116-90068eee8829" entryTtl="5000000" expirationInterval="3" />
 	
@@ -18,6 +18,12 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 	<db:config name="Database_Config1" doc:name="Database Config" doc:id="af9ba5bb-3bd2-4472-b0fc-5ccf9094444d" >
 		<db:my-sql-connection host="localhost" port="3306" user="root" password="root" database="client-charging" />
 	</db:config>
+	<http:request-config name="HTTP_Request_configuration1" doc:name="HTTP Request configuration" doc:id="47824da9-94d4-4650-bada-e455b8c18cda" basePath="/books/v3" >
+		<http:request-connection host="www.zohoapis.in" protocol="HTTPS"/>
+	</http:request-config>
+	<http:request-config name="HTTP_Request_configuration2" doc:name="HTTP Request configuration" doc:id="6238b11e-836a-41f5-bdef-d8f657d0d8c6" basePath="/oauth/v2" >
+		<http:request-connection protocol="HTTPS" host="accounts.zoho.in" />
+	</http:request-config>
 	<flow name="cache-client_chargingFlow" doc:id="78faea64-f9e6-4083-9996-a21906b6ff1f" >
 		<http:listener doc:name="Listener" doc:id="5c7f8cf3-c3ad-4dad-83cd-706272537027" config-ref="HTTP_Listener_config1" path="/getinvoices"/>
 		<flow-ref name="cache-generate-access-token" doc:name="cache-generate-access-token Flow"/>
@@ -53,7 +59,7 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 				</when>
 				<otherwise >
 					<logger level="INFO" doc:name="Logger" doc:id="2303c992-8f67-48f9-913f-f848b3c08f3d" message="refresh_token variable: #[vars.refresh_token]" />
-					<http:request method="POST" doc:name="Referesh token request" doc:id="cea7e76d-4625-44e2-baa3-61798b53afb7" config-ref="HTTP_Request_configuration1" path="/token">
+					<http:request method="POST" doc:name="Referesh token request" doc:id="cea7e76d-4625-44e2-baa3-61798b53afb7" config-ref="HTTP_Request_configuration2" path="/token">
 			<http:query-params><![CDATA[#[output application/java
 ---
 {
@@ -100,9 +106,9 @@ output application/java
 			<http:headers><![CDATA[#[output application/java
     ---
     {
-    "Cookie": "zohocares-_uuid=f3b62a75-5f90-47da-835d-af2fa7416835_d266; zohocares-_zldp=YfEOFpfOAG%2B4Ou1uL02sxm0d3Ln5rcdQ%2F8XG%2B76QFfUSCrpukMK1vcTG2E%2F6UClmTPnJ%2FBYY4Go%3D; 5817893107=776a78801cb78975a802433848e67bfc; zohocares-_zldt=879f414f-e11d-42b4-8cab-88dd9ecf6d1b-2; JSESSIONID=23F001030216CA53BB807EDF21DF1FB1; _iamadt=fef647af07abcc9c17e15222dec7ba489aa24abec28b5004f38886ddf73ae2b823dfb682bc949d0eed374527fca11f91815a687567356dd3c45d9a5c70189532; _iambdt=35c1409da64f5a5704c9fd39f7f62a7cabfa2cc537a9ef15947ce89bf7388a42fdf9b6c61c040488f1f6ac5b27db9bf5cc2dc40793a1d07dd13ed75a10f33b47; iamcsr=be484038e6143b0e31642c25bb58eafdd19239e6c2681da0c87a157f654086df6e558e4955b68b26310fb9790bbaf44a446610f2dcf7fb39891aa82d3f5f6fbd; _zcsr_tmp=be484038e6143b0e31642c25bb58eafdd19239e6c2681da0c87a157f654086df6e558e4955b68b26310fb9790bbaf44a446610f2dcf7fb39891aa82d3f5f6fbd",
+    "Cookie": "zohocares-_zldp=YfEOFpfOAG8Hdr41EhRCCZDHiHFENYf6LRfwpZUdoaiQbcq505u%2BFfYjkZb8Wu58TPnJ%2FBYY4Go%3D; zohocares-_uuid=1b2f3139-05c3-4c7f-a6d2-987859d54589_d266; _iamadt=fef647af07abcc9c17e15222dec7ba4878c2d671274f4e3e648cf3ffc098a85f600bd96db2a0e929bade45d7f14ab29b6f8819e1cca672520f990e4dd5d651a1; _iambdt=3e93625b3894096a3302876fc09994602ee55c58c76b572e9fbce5f8a7ed8100ae62169b14c6abd0b59beff434ecc76b4e4cd33dd5ab37dec123b15ed7d75539; zohocares-_zldt=f127a16b-276e-47e4-95e2-916a56ca112b-2; 5817893107=776a78801cb78975a802433848e67bfc; iamcsr=b99f851fe5bda586f647bb5d280d849ab243872d6d4f14d6fcedc332b38a364a86c9363ea0f82d2ba98166809278af26887d22fb1f1e192ccf4964409afc3d57; _zcsr_tmp=b99f851fe5bda586f647bb5d280d849ab243872d6d4f14d6fcedc332b38a364a86c9363ea0f82d2ba98166809278af26887d22fb1f1e192ccf4964409afc3d57; JSESSIONID=885289EF50E092AEADCD976A162C9B08",
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "X-ZCSRF-TOKEN": "iamcsrcoo=be484038e6143b0e31642c25bb58eafdd19239e6c2681da0c87a157f654086df6e558e4955b68b26310fb9790bbaf44a446610f2dcf7fb39891aa82d3f5f6fbd"
+    "X-ZCSRF-TOKEN": "iamcsrcoo=b99f851fe5bda586f647bb5d280d849ab243872d6d4f14d6fcedc332b38a364a86c9363ea0f82d2ba98166809278af26887d22fb1f1e192ccf4964409afc3d57"
 }]]]></http:headers>
 		</http:request>
 		<ee:transform doc:name="Transform Response" doc:id="7438fc5e-3aea-4ef6-ac85-64c6751f5c72">
@@ -116,7 +122,7 @@ output application/json
 			</ee:message>
 		</ee:transform>
 		<set-variable value="#[payload.granttoken]" doc:name="Set Grant token" doc:id="f6a9f6ce-af96-4953-891a-9d5e4eea9bb9" variableName="granttoken" />
-		<http:request method="POST" doc:name="Request access token" doc:id="b3bf3364-9255-4901-a776-0fb911a5c8cc" config-ref="HTTP_Request_configuration1" path="/token">
+		<http:request method="POST" doc:name="Request access token" doc:id="b3bf3364-9255-4901-a776-0fb911a5c8cc" config-ref="HTTP_Request_configuration2" path="/token">
 			<http:query-params><![CDATA[#[output application/java
 ---
 {
@@ -138,7 +144,7 @@ payload]]></ee:set-payload>
 	
 </flow>
 	<flow name="call-get-invoice" doc:id="1b8a60d2-1e2f-4a15-9fd5-02665eebc5ad" >
-		<http:request method="GET" doc:name="get invoice" doc:id="2c753ea5-d1aa-4b96-b1f9-dbd4b9a4d75a" config-ref="HTTP_Request_configuration" path="/invoices" sendBodyMode="ALWAYS">
+		<http:request method="GET" doc:name="get invoice" doc:id="2c753ea5-d1aa-4b96-b1f9-dbd4b9a4d75a" config-ref="HTTP_Request_configuration1" path="/invoices" sendBodyMode="ALWAYS">
 			<http:headers><![CDATA[#[output application/java
 ---
 {
@@ -176,7 +182,7 @@ payload.invoices map ((invoice) -> {
         <choice doc:name="Check if invoice record exists" doc:id="3070c1cf-71a9-446b-a85e-de24a8bcf93d">
             <!-- Handle if invoice record already exists -->
             <when expression="#[payload != null and not isEmpty(payload)]">
-              <set-payload value="#[{'invoice_id':vars.invoiceIdData, 'status': 'Invoice record already updated'}]" doc:name="Set already updated Payload" doc:id="27754d72-fbde-461f-a0ea-774f777a4dd5" />   
+              <set-payload value="#[{'invoice_id':vars.invoiceIdData,'customer_id':vars.customerIdData, 'status': 'The invoice is already processed.'}]" doc:name="Set already updated Payload" doc:id="27754d72-fbde-461f-a0ea-774f777a4dd5" />   
             </when>
             <otherwise>
 			<db:select doc:name="get customer record" doc:id="42431076-d4f0-485f-a3bb-1ca89356b3c0" config-ref="Database_Config1" >
