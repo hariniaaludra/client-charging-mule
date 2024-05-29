@@ -24,75 +24,26 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 	<http:request-config name="HTTP_Request_configuration2" doc:name="HTTP Request configuration" doc:id="6238b11e-836a-41f5-bdef-d8f657d0d8c6" basePath="/oauth/v2" >
 		<http:request-connection protocol="HTTPS" host="accounts.zoho.in" />
 	</http:request-config>
-	<flow name="cache-client_chargingFlow" doc:id="78faea64-f9e6-4083-9996-a21906b6ff1f" >
-		<http:listener doc:name="Listener" doc:id="5c7f8cf3-c3ad-4dad-83cd-706272537027" config-ref="HTTP_Listener_config1" path="/getinvoices"/>
-		<flow-ref name="cache-generate-access-token" doc:name="cache-generate-access-token Flow"/>
-		<set-variable value="#[payload.refresh_token]" doc:name="Set refresh token Variable" doc:id="8d7ddb99-2060-411d-bfc5-acdf66a2bd8b" variableName="refreshToken" />
-		<flow-ref doc:name="call-get-invoice Flow" doc:id="1b7ac6c8-5af0-4626-9f8e-323eb9470e29" name="call-get-invoice"/>
-		<error-handler >
-			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="3a590daf-82ac-45f3-bc82-19eae5b45f6b" type=" HTTP:UNAUTHORIZED" >
-				<logger level="ERROR" doc:name="Logger" doc:id="b7c21dc2-229b-43bb-b56a-d42b128d2035" message="Unauthorized error handled" />
-					<ee:invalidate-key doc:name="Remove cache" doc:id="af1a817d-f78a-4170-acd0-c73be2eaf580" cachingStrategy-ref="Caching_Strategy" keyGenerationExpression="#['cacheKey']" />
-				<set-variable value="#['REFRESH']" doc:name="set REFRESH value" doc:id="85211396-70a1-4bd8-a396-a2d4d51aabbc" variableName="tokenCondition" />
-				<flow-ref doc:name="cache-generate-access-token Flow" doc:id="a14bf65b-c376-4732-ae1e-9e6531c07c61" name="cache-generate-access-token" />
-				<flow-ref doc:name="refresh-token-invoice-call Flow" doc:id="fa9096ce-122e-4f33-8fd6-d56d409e86d4" name="refresh-token-invoice-call"/>
-			</on-error-continue>
-		</error-handler>
+	<os:config name="ObjectStore_Config" doc:name="ObjectStore Config" doc:id="03f9eee5-eaa6-487c-a3c7-eaf1a819f96c" />
+	<ee:object-store-caching-strategy name="final_Caching_Strategy" doc:name="Caching Strategy" doc:id="3bbc78f0-97fb-4cb0-b4fb-55949d32dc10" keyGenerationExpression="#['code']" >
+		<os:private-object-store entryTtl="3300" config-ref="ObjectStore_Config" />
+	</ee:object-store-caching-strategy>
+	<ee:object-store-caching-strategy name="final_access_Caching_Strategy" doc:name="Caching Strategy" doc:id="6482de37-b04e-4ac8-927a-feb5e8fba6aa" keyGenerationExpression="#['access']" >
+		<os:private-object-store entryTtl="3300" config-ref="ObjectStore_Config" />
+	</ee:object-store-caching-strategy>
+	<flow name="Scheduler-flow" doc:id="10b0f6b5-3029-442e-ab35-de50d0bc59c5" >
+		<scheduler doc:name="Scheduler" doc:id="d4b8cdbf-4b28-4ea0-8360-a7239546ebab" >
+			<scheduling-strategy >
+				<cron expression="0 19 13 1/1 * ? *"/>
+			</scheduling-strategy>
+		</scheduler>
+		<flow-ref doc:name="Call - final-cache-client-chargingFlow" doc:id="968c2752-2956-4e97-adfc-83ecc1575027" name="final-cache-client-chargingFlow"/>
 	</flow>
-	<flow name="refresh-token-invoice-call" doc:id="266add19-7d45-4e8d-8fed-4cd67e61b112">
-		<flow-ref doc:name="call-get-invoice Flow" doc:id="c5a8d087-a6d3-4a60-b3bd-4d8d2fba78d3" name="call-get-invoice" />
-		<error-handler >
-			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="ed25074d-e087-4df5-8af3-4c00052dbb0d" type=" HTTP:UNAUTHORIZED" >
-				<ee:invalidate-key doc:name="Invalidate Key" doc:id="bf998ac7-50da-490f-8d39-e5495abfbfc5" cachingStrategy-ref="Caching_Strategy" keyGenerationExpression="#['cacheKey']" />
-				<set-variable value="#[null]" doc:name="Set Variable" doc:id="fda6f272-a91d-4a1e-92ba-e995f326b1af" variableName="tokenCondition" />
-				<flow-ref doc:name="cache-generate-access-token Flow" doc:id="3e52082e-ecef-4438-a0df-db340fbc007e" name="cache-generate-access-token"/>
-				<flow-ref doc:name="call-get-invoice Flow" doc:id="d09b7b20-7797-4de7-b105-7b5393ec1b69" name="call-get-invoice" />
-
-		</on-error-continue>
-		</error-handler >
-	</flow>
-	<flow name="cache-generate-access-token" doc:id="d8f0c476-4a6c-4204-b887-afa3a701a35f" >
-		<ee:cache doc:name="Cache" doc:id="0d379e23-83b8-4d23-81b7-9174dc35b132" cachingStrategy-ref="Caching_Strategy">
-			<choice doc:name="Choice" doc:id="dadc148a-7e76-406d-b90a-d42b27ead3a7" >
-				<when expression="vars.tokenCondition == null">
-					<flow-ref doc:name="cache-code-access-token Flow" doc:id="fff79b43-9250-48d5-9480-0179d10241e4" name="cache-code-access-token"/>
-				</when>
-				<otherwise >
-					<logger level="INFO" doc:name="Logger" doc:id="2303c992-8f67-48f9-913f-f848b3c08f3d" message="refresh_token variable: #[vars.refresh_token]" />
-					<http:request method="POST" doc:name="Referesh token request" doc:id="cea7e76d-4625-44e2-baa3-61798b53afb7" config-ref="HTTP_Request_configuration2" path="/token">
-			<http:query-params><![CDATA[#[output application/java
----
-{
-	"redirect_uri" : "https://www.google.com/",
-	"refresh_token" : vars.refreshToken,
-	"client_secret" : "5ac54699bf8565c6eeed8897a44f2ae8a3ee8c99b3",
-	"grant_type" : "refresh_token",
-	"client_id" : "1000.Q999RRE0B0S030JTFRT2IQL17S6XTS"
-}]]]></http:query-params>
-		</http:request>
-					<ee:transform doc:name="Transform Message" doc:id="55c4dec2-bb93-4fce-a1cc-ea5c4585f5dd">
-						<ee:message>
-							<ee:set-payload><![CDATA[%dw 2.0
-output application/java
----
-{
-    "access_token": payload.access_token,
-    "refresh_token": vars.refreshToken,
-    "scope": payload.scope,
-    "api_domain": payload.api_domain,
-    "token_type": payload.token_type,
-    "expires_in": payload.expires_in
-}]]></ee:set-payload>
-						</ee:message>
-					</ee:transform>
-					<logger level="INFO" doc:name="Logger" doc:id="c03541eb-16eb-42c9-9ad3-c1a0e9dffb40" message="refresh access token : #[vars.refreshAccessToken]" />
-				</otherwise>
-			</choice>
-		</ee:cache>
-	</flow>
-	<flow name="cache-code-access-token" doc:id="1f44afd9-1518-48fe-8adf-305a7071b6ce">
-		<http:request method="POST" doc:name="Request authorization code" doc:id="beeccaa6-0ac8-42ea-96c9-b390dade7e2d" url="https://api-console.zoho.in/oauthapi/v1/selfclient/1000.Q999RRE0B0S030JTFRT2IQL17S6XTS/granttoken">
-			<http:body><![CDATA[#[output application/json
+	<flow name="final-cache-client-chargingFlow" doc:id="cfb9920e-aa63-4c1e-9fa5-2b0a98b02c9f" >
+		<http:listener doc:name="Listener" doc:id="dbdae568-44a1-4eb3-bd5b-182e43afbdb0" config-ref="HTTP_Listener_config1" path="/getinvoice"/>
+		<ee:cache doc:name="Cache" doc:id="6808898d-c23c-4107-a06a-3d103a3ee038" cachingStrategy-ref="final_Caching_Strategy">
+			<http:request method="POST" doc:name="Request authorization code" doc:id="e419b51d-c5ec-4e37-addb-07d04dbf047f" url="https://api-console.zoho.in/oauthapi/v1/selfclient/1000.Q999RRE0B0S030JTFRT2IQL17S6XTS/granttoken" >
+				<http:body ><![CDATA[#[output application/json
     ---
     {
     "granttoken": {
@@ -103,27 +54,29 @@ output application/java
         "description": "test"
     }
 }]]]></http:body>
-			<http:headers><![CDATA[#[output application/java
+				<http:headers ><![CDATA[#[output application/java
     ---
     {
-    "Cookie": "zohocares-_zldp=YfEOFpfOAG8Hdr41EhRCCZDHiHFENYf6LRfwpZUdoaiQbcq505u%2BFfYjkZb8Wu58TPnJ%2FBYY4Go%3D; zohocares-_uuid=1b2f3139-05c3-4c7f-a6d2-987859d54589_d266; _iamadt=fef647af07abcc9c17e15222dec7ba4878c2d671274f4e3e648cf3ffc098a85f600bd96db2a0e929bade45d7f14ab29b6f8819e1cca672520f990e4dd5d651a1; _iambdt=3e93625b3894096a3302876fc09994602ee55c58c76b572e9fbce5f8a7ed8100ae62169b14c6abd0b59beff434ecc76b4e4cd33dd5ab37dec123b15ed7d75539; zohocares-_zldt=f127a16b-276e-47e4-95e2-916a56ca112b-2; 5817893107=776a78801cb78975a802433848e67bfc; iamcsr=b99f851fe5bda586f647bb5d280d849ab243872d6d4f14d6fcedc332b38a364a86c9363ea0f82d2ba98166809278af26887d22fb1f1e192ccf4964409afc3d57; _zcsr_tmp=b99f851fe5bda586f647bb5d280d849ab243872d6d4f14d6fcedc332b38a364a86c9363ea0f82d2ba98166809278af26887d22fb1f1e192ccf4964409afc3d57; JSESSIONID=885289EF50E092AEADCD976A162C9B08",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "X-ZCSRF-TOKEN": "iamcsrcoo=b99f851fe5bda586f647bb5d280d849ab243872d6d4f14d6fcedc332b38a364a86c9363ea0f82d2ba98166809278af26887d22fb1f1e192ccf4964409afc3d57"
+    "Cookie":"zohocares-_uuid=f3b62a75-5f90-47da-835d-af2fa7416835_d266; zohocares-_zldp=YfEOFpfOAG%2B4Ou1uL02sxm0d3Ln5rcdQ%2F8XG%2B76QFfUSCrpukMK1vcTG2E%2F6UClmTPnJ%2FBYY4Go%3D; _iamadt=fef647af07abcc9c17e15222dec7ba489aa24abec28b5004f38886ddf73ae2b823dfb682bc949d0eed374527fca11f91815a687567356dd3c45d9a5c70189532; _iambdt=35c1409da64f5a5704c9fd39f7f62a7cabfa2cc537a9ef15947ce89bf7388a42fdf9b6c61c040488f1f6ac5b27db9bf5cc2dc40793a1d07dd13ed75a10f33b47; zohocares-_zldt=879f414f-e11d-42b4-8cab-88dd9ecf6d1b-2; wms-tkp-token=60029138469-df957a20-9ae61367b88f054b91d717cb63461bb3; 5817893107=776a78801cb78975a802433848e67bfc; iamcsr=be484038e6143b0e31642c25bb58eafdd19239e6c2681da0c87a157f654086df6e558e4955b68b26310fb9790bbaf44a446610f2dcf7fb39891aa82d3f5f6fbd; _zcsr_tmp=be484038e6143b0e31642c25bb58eafdd19239e6c2681da0c87a157f654086df6e558e4955b68b26310fb9790bbaf44a446610f2dcf7fb39891aa82d3f5f6fbd; ZohoMarkRef=\"https://www.zoho.com/accounts/protocol/oauth.html\"; ZohoMarkSrc=\"google:zoho|google:accounts|google:marketplace\"; cookie-uid=\"282f6078-ac05-4418-8c4d-5c7b7090f4bc_d221\"; JSESSIONID=6AA6E496984EA36B7AE78E8E1BB4AB9C",
+    "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "X-ZCSRF-TOKEN":"iamcsrcoo=be484038e6143b0e31642c25bb58eafdd19239e6c2681da0c87a157f654086df6e558e4955b68b26310fb9790bbaf44a446610f2dcf7fb39891aa82d3f5f6fbd"
 }]]]></http:headers>
-		</http:request>
-		<ee:transform doc:name="Transform Response" doc:id="7438fc5e-3aea-4ef6-ac85-64c6751f5c72">
-			<ee:message>
-				<ee:set-payload><![CDATA[%dw 2.0
+			</http:request>
+			<ee:transform doc:name="Transform Response" doc:id="f61f63a0-8531-4e0a-bd5a-37dfb4000f0f" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
 output application/json
 ---
 {
     "granttoken": payload.granttoken.Grant_token
 }]]></ee:set-payload>
-			</ee:message>
-		</ee:transform>
-		<set-variable value="#[payload.granttoken]" doc:name="Set Grant token" doc:id="f6a9f6ce-af96-4953-891a-9d5e4eea9bb9" variableName="granttoken" />
-		<http:request method="POST" doc:name="Request access token" doc:id="b3bf3364-9255-4901-a776-0fb911a5c8cc" config-ref="HTTP_Request_configuration2" path="/token">
-			<http:query-params><![CDATA[#[output application/java
+				</ee:message>
+			</ee:transform>
+		</ee:cache>
+		<set-variable value="#[payload.granttoken]" doc:name="Set Grant token" doc:id="2a7719af-41c8-4f4c-934b-f3f0efa10b47" variableName="granttoken" />
+		<ee:cache doc:name="Cache" doc:id="21887dac-823e-4a32-aed7-8a240d8e8036" cachingStrategy-ref="final_access_Caching_Strategy">
+			<http:request method="POST" doc:name="Request access token" doc:id="c479199d-93d5-4d68-a40f-a5af6872f1d2" config-ref="HTTP_Request_configuration2" path="/token" >
+				<http:query-params ><![CDATA[#[output application/java
 ---
 {
 	"redirect_uri" : "https://www.google.com/",
@@ -132,17 +85,18 @@ output application/json
 	"grant_type" : "authorization_code",
 	"client_id" : "1000.Q999RRE0B0S030JTFRT2IQL17S6XTS"
 }]]]></http:query-params>
-		</http:request>
-		<ee:transform doc:name="Transform Message" doc:id="1271de6e-13b6-4aeb-a08a-96d4b69df301">
-			<ee:message>
-				<ee:set-payload><![CDATA[%dw 2.0
+			</http:request>
+			<ee:transform doc:name="Transform Message" doc:id="64ca9b2a-885c-4556-ac5e-eb6c7018cefd" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
 output application/json
 ---
 payload]]></ee:set-payload>
-			</ee:message>
-		</ee:transform>
-	
-</flow>
+				</ee:message>
+			</ee:transform>
+		</ee:cache>
+		<flow-ref doc:name="call-get-invoice Flow" doc:id="a9ea7e2e-10d8-4b79-917e-01da80f2d41a" name="call-get-invoice" />
+	</flow>
 	<flow name="call-get-invoice" doc:id="1b8a60d2-1e2f-4a15-9fd5-02665eebc5ad" >
 		<http:request method="GET" doc:name="get invoice" doc:id="2c753ea5-d1aa-4b96-b1f9-dbd4b9a4d75a" config-ref="HTTP_Request_configuration1" path="/invoices" sendBodyMode="ALWAYS">
 			<http:headers><![CDATA[#[output application/java
